@@ -1,0 +1,108 @@
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(ggmap)
+library(shiny)
+library(tidyquant)
+library(data.table)
+library(RColorBrewer)
+
+poketable <- read.csv("pokemon.csv", 
+header = TRUE)
+setDT(poketable)
+
+poketable[grep("Mega", poketable$Name)] -> poketable_1
+poketable_1 <- poketable_1[-16]
+poketable_clean <- anti_join(poketable, poketable_1)
+
+rm(poketable_1, poketable)
+
+
+subset(poketable_clean, 
+    select = c(Generation)) -> generation_table
+
+poketable_clean %>%
+    group_by(Generation) %>%
+    summarize(AvgSpeed = mean(Speed)) -> poketable_subset
+
+generation_table %>%
+    group_by(Generation) %>%
+    summarize(count = n()) -> generation_count
+
+rm(generation_table)    
+
+    poketable_clean %>%
+        filter(Generation == 2) %>%
+        count(Type.1) -> Generation2_by_type
+
+    min(poketable_clean$Speed) -> s_min
+
+    poketable_clean %>%
+        filter(Speed <= 5) -> min_pokemon_speed
+
+
+poketable_clean %>%
+    group_by(Generation, Type_1 = poketable_clean$Type.1) %>%
+    summarize(typeCount = n()) -> count_type
+
+poketable_clean %>%
+    group_by(Generation, Type_2 = poketable_clean$Type.2) %>%
+    summarize(typeCount = n()) %>% 
+    filter(Type_2 != "") -> count_type2
+
+g_avgSpeed_by_generation <- ggplot(poketable_subset, 
+    aes(Generation, AvgSpeed)) +
+    geom_bar(stat = 'identity', aes(fill = Generation)) +
+    scale_x_continuous(breaks = seq(0, 6, 1)) +
+    scale_fill_distiller(palette = 'Set2')
+
+gen_names <- as_labeller(
+    c('1' = "Gen1", '2' = "Gen2", 
+    '3' = "Gen3", '4' = "Gen4", 
+    '5' = "Gen5", '6' = "Gen6"))
+
+nbcolors <- length(unique(count_type$Type_1))
+nbcolors2 <- length(unique(count_type2$Type_2))
+
+mycolors <- colorRampPalette(brewer.pal(8, "Set2"))(nbcolors)
+mycolors2 <- colorRampPalette(brewer.pal(8, "Set2"))(nbcolors2)
+
+g_type1_by_generation <- ggplot(
+    count_type, aes(Type_1, typeCount)) +
+    geom_bar(stat = 'identity',
+    aes(fill = Type_1)) + 
+    geom_text(aes(label = Type_1), 
+    position=position_dodge(width=0.9), vjust = 0.25,  
+    hjust = -.25, angle = 90) +
+    scale_y_continuous(breaks = seq(0, 40, 2),
+    limits = c(0,max(count_type$typeCount + 2))) +
+    facet_wrap(~Generation, labeller = gen_names) +
+    scale_fill_manual(values = mycolors) +
+    theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        plot.background = element_rect(fill = 'black'),
+        axis.title = element_text(color = 'white'),
+        axis.text = element_text(color = 'white'),
+        panel.grid = element_blank())
+
+g_type2_by_generation <- ggplot(
+    count_type2, aes(Type_2, typeCount)) +
+    geom_bar(stat = 'identity',
+    aes(fill = Type_2)) + 
+    geom_text(aes(label = Type_2), 
+    position=position_dodge(width=0.9), vjust = 0.25,  
+    hjust = -.25, angle = 90) +
+    scale_y_continuous(breaks = seq(0, 40, 2),
+    limits = c(0,max(count_type2$typeCount + 2))) +
+    facet_wrap(~Generation, labeller = gen_names) +
+    scale_fill_manual(values = mycolors2) +
+    theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        plot.background = element_rect(fill = 'black'),
+        axis.title = element_text(color = 'white'),
+        axis.text = element_text(color = 'white'),
+        panel.grid = element_blank())
+
+g_type1_by_generation
+g_type2_by_generation
+g_avgSpeed_by_generation
